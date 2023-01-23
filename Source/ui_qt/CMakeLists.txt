@@ -265,6 +265,7 @@ if(TARGET_PLATFORM_MACOS)
 		macos/InputProviderMacOsHid.cpp
 		macos/InputProviderMacOsHid.h
 	)
+	FILE(GLOB ARCADE_DEFS ${CMAKE_CURRENT_SOURCE_DIR}/../../arcadedefs/*.arcadedef)
 	set(OSX_RES
 		${CMAKE_CURRENT_SOURCE_DIR}/macos/AppIcon.icns
 		${CMAKE_CURRENT_SOURCE_DIR}/../../patches.xml
@@ -275,7 +276,7 @@ if(TARGET_PLATFORM_MACOS)
 	if(USE_GSH_VULKAN)
 		list(APPEND OSX_RES $ENV{VULKAN_SDK}/../MoltenVK/dylib/macOS/libMoltenVk.dylib)
 	endif()
-	add_executable(Play MACOSX_BUNDLE ${QT_SOURCES} ${QT_MOC_SRCS} ${QT_RES_SOURCES} ${QT_UI_HEADERS} ${OSX_RES})
+	add_executable(Play MACOSX_BUNDLE ${QT_SOURCES} ${QT_MOC_SRCS} ${QT_RES_SOURCES} ${QT_UI_HEADERS} ${OSX_RES} ${ARCADE_DEFS})
 	# Set a custom plist file for the app bundle
 	# NOTE: for these values to be used Info.plist has to be edited
 	# NOTE: from cmake 3.7.0 you can use %b for month name abbreviations
@@ -294,6 +295,7 @@ if(TARGET_PLATFORM_MACOS)
 			MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist.in"
 		RESOURCE "${OSX_RES}"
 	)
+	SET_SOURCE_FILES_PROPERTIES(${ARCADE_DEFS} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/arcadedefs")
 	list(APPEND PROJECT_LIBS "-framework IOKit -framework CoreFoundation")
 	if(USE_GSH_VULKAN)
 		target_include_directories(Play PRIVATE $ENV{VULKAN_SDK}/../MoltenVK/include)
@@ -327,6 +329,10 @@ elseif(TARGET_PLATFORM_UNIX)
 	)
 	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../installer_unix/org.purei.Play.metainfo.xml
 		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/metainfo
+	)
+	FILE(GLOB ARCADE_DEFS ${CMAKE_CURRENT_SOURCE_DIR}/../../arcadedefs/*.arcadedef)
+	install(FILES ${ARCADE_DEFS}
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/arcadedefs
 	)
 	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../states.db")
 		install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../states.db

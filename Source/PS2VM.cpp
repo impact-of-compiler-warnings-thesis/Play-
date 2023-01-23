@@ -46,6 +46,7 @@
 #define PREF_PS2_MC0_DIRECTORY_DEFAULT ("vfs/mc0")
 #define PREF_PS2_MC1_DIRECTORY_DEFAULT ("vfs/mc1")
 #define PREF_PS2_HDD_DIRECTORY_DEFAULT ("vfs/hdd")
+#define PREF_PS2_ARCADEROMS_DIRECTORY_DEFAULT ("arcaderoms")
 
 CPS2VM::CPS2VM()
     : m_nStatus(PAUSED)
@@ -74,6 +75,7 @@ CPS2VM::CPS2VM()
 		std::make_pair(PREF_PS2_MC0_DIRECTORY, PREF_PS2_MC0_DIRECTORY_DEFAULT),
 		std::make_pair(PREF_PS2_MC1_DIRECTORY, PREF_PS2_MC1_DIRECTORY_DEFAULT),
 		std::make_pair(PREF_PS2_HDD_DIRECTORY, PREF_PS2_HDD_DIRECTORY_DEFAULT),
+		std::make_pair(PREF_PS2_ARCADEROMS_DIRECTORY, PREF_PS2_ARCADEROMS_DIRECTORY_DEFAULT),
 	};
 	// clang-format on
 
@@ -240,6 +242,8 @@ void CPS2VM::PauseAsync()
 void CPS2VM::Reset()
 {
 	assert(m_nStatus == PAUSED);
+	BeforeExecutableReloaded = ExecutableReloadedHandler();
+	AfterExecutableReloaded = ExecutableReloadedHandler();
 	ResetVM();
 }
 
@@ -423,8 +427,8 @@ void CPS2VM::ResetVM()
 		iopOs->GetIoman()->RegisterDevice("host0", std::make_shared<Iop::Ioman::CPreferenceDirectoryDevice>(PREF_PS2_HOST_DIRECTORY));
 		iopOs->GetIoman()->RegisterDevice("mc0", std::make_shared<Iop::Ioman::CPreferenceDirectoryDevice>(PREF_PS2_MC0_DIRECTORY));
 		iopOs->GetIoman()->RegisterDevice("mc1", std::make_shared<Iop::Ioman::CPreferenceDirectoryDevice>(PREF_PS2_MC1_DIRECTORY));
-		iopOs->GetIoman()->RegisterDevice("cdrom", Iop::CIoman::DevicePtr(new Iop::Ioman::COpticalMediaDevice(m_cdrom0)));
-		iopOs->GetIoman()->RegisterDevice("cdrom0", Iop::CIoman::DevicePtr(new Iop::Ioman::COpticalMediaDevice(m_cdrom0)));
+		iopOs->GetIoman()->RegisterDevice("cdrom", Iop::Ioman::DevicePtr(new Iop::Ioman::COpticalMediaDevice(m_cdrom0)));
+		iopOs->GetIoman()->RegisterDevice("cdrom0", Iop::Ioman::DevicePtr(new Iop::Ioman::COpticalMediaDevice(m_cdrom0)));
 		iopOs->GetIoman()->RegisterDevice("hdd0", std::make_shared<Iop::Ioman::CHardDiskDevice>());
 
 		iopOs->GetLoadcore()->SetLoadExecutableHandler(std::bind(&CPS2OS::LoadExecutable, m_ee->m_os, std::placeholders::_1, std::placeholders::_2));
@@ -787,7 +791,15 @@ void CPS2VM::ReloadExecutable(const char* executablePath, const CPS2OS::Argument
 		ResetVM();
 		memcpy(m_iop->m_spuRam, savedSpuRam.data(), PS2::SPU_RAM_SIZE);
 	}
+	if(BeforeExecutableReloaded)
+	{
+		BeforeExecutableReloaded(this);
+	}
 	m_ee->m_os->BootFromVirtualPath(executablePath, arguments);
+	if(AfterExecutableReloaded)
+	{
+		AfterExecutableReloaded(this);
+	}
 }
 
 void CPS2VM::OnCrtModeChange()

@@ -28,10 +28,12 @@ public:
 		int32 iopIdleTicks = 0;
 	};
 
+	typedef std::unique_ptr<COpticalMedia> OpticalMediaPtr;
 	typedef std::unique_ptr<Ee::CSubSystem> EeSubSystemPtr;
 	typedef std::unique_ptr<Iop::CSubSystem> IopSubSystemPtr;
 	typedef std::function<void(const CFrameDump&)> FrameDumpCallback;
 	typedef Framework::CSignal<void(const CProfiler::ZoneArray&)> ProfileFrameDoneSignal;
+	typedef std::function<void(CPS2VM*)> ExecutableReloadedHandler;
 
 	CPS2VM();
 	virtual ~CPS2VM() = default;
@@ -64,6 +66,9 @@ public:
 	void DestroySoundHandler();
 	void ReloadSpuBlockCount();
 
+	void CDROM0_SyncPath();
+	void CDROM0_Reset();
+
 	void ReloadFrameRateLimit();
 
 	static fs::path GetStateDirectoryPath();
@@ -82,12 +87,16 @@ public:
 	void SaveDebugTags(const char*);
 #endif
 
-	CPadHandler* m_pad;
+	OpticalMediaPtr m_cdrom0;
+	CPadHandler* m_pad = nullptr;
 
 	EeSubSystemPtr m_ee;
 	IopSubSystemPtr m_iop;
 
 	ProfileFrameDoneSignal ProfileFrameDone;
+
+	ExecutableReloadedHandler BeforeExecutableReloaded;
+	ExecutableReloadedHandler AfterExecutableReloaded;
 
 protected:
 	virtual void CreateVM();
@@ -96,8 +105,6 @@ protected:
 	CMailBox m_mailBox;
 
 private:
-	typedef std::unique_ptr<COpticalMedia> OpticalMediaPtr;
-
 	void ResetVM();
 	void DestroyVM();
 	bool SaveVMState(const fs::path&);
@@ -127,8 +134,6 @@ private:
 
 	void OnGsNewFrame();
 
-	void CDROM0_SyncPath();
-	void CDROM0_Reset();
 	void SetIopOpticalMedia(COpticalMedia*);
 
 	void RegisterModulesInPadHandler();
@@ -161,8 +166,6 @@ private:
 	std::mutex m_frameDumpCallbackMutex;
 	bool m_dumpingFrame = false;
 #endif
-
-	OpticalMediaPtr m_cdrom0;
 
 	//SPU update parameters
 	enum

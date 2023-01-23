@@ -144,6 +144,8 @@ set(COMMON_SRC_FILES
 	COP_SCU.cpp
 	COP_SCU.h
 	COP_SCU_Reflection.cpp
+	discimages/ChdCdImageStream.cpp
+	discimages/ChdCdImageStream.h
 	discimages/ChdImageStream.cpp
 	discimages/ChdImageStream.h
 	discimages/ChdStreamSupport.cpp
@@ -253,6 +255,13 @@ set(COMMON_SRC_FILES
 	gs/GsPixelFormats.h
 	gs/GsSpriteRegion.h
 	gs/GsTextureCache.h
+	hdd/ApaDefs.h
+	hdd/ApaReader.cpp
+	hdd/ApaReader.h
+	hdd/HddDefs.h
+	hdd/PfsDefs.h
+	hdd/PfsReader.cpp
+	hdd/PfsReader.h
 	input/InputBindingManager.cpp
 	input/InputBindingManager.h
 	input/InputProvider.h
@@ -262,8 +271,12 @@ set(COMMON_SRC_FILES
 	iop/ArgumentIterator.h
 	iop/ioman/DirectoryDevice.cpp
 	iop/ioman/DirectoryDevice.h
+	iop/ioman/McDumpDevice.cpp
+	iop/ioman/McDumpDevice.h
 	iop/ioman/HardDiskDevice.cpp
 	iop/ioman/HardDiskDevice.h
+	iop/ioman/HardDiskDumpDevice.cpp
+	iop/ioman/HardDiskDumpDevice.h
 	iop/ioman/OpticalMediaDevice.cpp
 	iop/ioman/OpticalMediaDevice.h
 	iop/ioman/OpticalMediaDirectoryIterator.cpp
@@ -323,6 +336,12 @@ set(COMMON_SRC_FILES
 	iop/Iop_Module.h
 	iop/Iop_MtapMan.cpp
 	iop/Iop_MtapMan.h
+	iop/namco_arcade/Iop_NamcoAcCdvd.cpp
+	iop/namco_arcade/Iop_NamcoAcCdvd.h
+	iop/namco_arcade/Iop_NamcoAcRam.cpp
+	iop/namco_arcade/Iop_NamcoAcRam.h
+	iop/Iop_NamcoArcade.cpp
+	iop/Iop_NamcoArcade.h
 	iop/Iop_PadMan.cpp
 	iop/Iop_PadMan.h
 	iop/Iop_PathUtils.cpp
@@ -381,6 +400,7 @@ set(COMMON_SRC_FILES
 	iop/Iop_Vblank.h
 	iop/IopBios.cpp
 	iop/IopBios.h
+	ISO9660/BlockProvider.h
 	ISO9660/DirectoryRecord.cpp
 	ISO9660/DirectoryRecord.h
 	ISO9660/File.cpp

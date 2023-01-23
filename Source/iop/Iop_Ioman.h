@@ -33,8 +33,6 @@ namespace Iop
 		{
 		};
 
-		typedef std::shared_ptr<Ioman::CDevice> DevicePtr;
-
 		CIoman(CIopBios&, uint8*);
 		virtual ~CIoman();
 
@@ -45,7 +43,7 @@ namespace Iop
 		void SaveState(Framework::CZipArchiveWriter&) const override;
 		void LoadState(Framework::CZipArchiveReader&) override;
 
-		void RegisterDevice(const char*, const DevicePtr&);
+		void RegisterDevice(const char*, const Ioman::DevicePtr&);
 
 		uint32 Open(uint32, const char*);
 		uint32 Close(uint32);
@@ -133,8 +131,9 @@ namespace Iop
 
 		typedef std::map<int32, FileInfo> FileMapType;
 		typedef std::map<uint32, Ioman::DirectoryIteratorPtr> DirectoryMapType;
-		typedef std::map<std::string, DevicePtr> DeviceMapType;
+		typedef std::map<std::string, Ioman::DevicePtr> DeviceMapType;
 		typedef std::map<std::string, uint32> UserDeviceMapType;
+		typedef std::map<std::string, std::string> MountedDeviceMapType;
 
 		void PrepareOpenThunk();
 		Framework::CStream* OpenInternal(uint32, const char*);
@@ -151,14 +150,17 @@ namespace Iop
 
 		void SaveFilesState(Framework::CZipArchiveWriter&) const;
 		void SaveUserDevicesState(Framework::CZipArchiveWriter&) const;
+		void SaveMountedDevicesState(Framework::CZipArchiveWriter&) const;
 
 		void LoadFilesState(Framework::CZipArchiveReader&);
 		void LoadUserDevicesState(Framework::CZipArchiveReader&);
+		void LoadMountedDevicesState(Framework::CZipArchiveReader&);
 
 		FileMapType m_files;
 		DirectoryMapType m_directories;
 		DeviceMapType m_devices;
 		UserDeviceMapType m_userDevices;
+		MountedDeviceMapType m_mountedDevices;
 		CIopBios& m_bios;
 		uint8* m_ram;
 		uint32 m_nextFileHandle;

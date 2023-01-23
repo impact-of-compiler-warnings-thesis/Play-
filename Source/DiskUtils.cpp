@@ -4,7 +4,7 @@
 #include "make_unique.h"
 #include "stricmp.h"
 #include "DiskUtils.h"
-#include "discimages/ChdImageStream.h"
+#include "discimages/ChdCdImageStream.h"
 #include "discimages/CsoImageStream.h"
 #include "discimages/CueSheet.h"
 #include "discimages/IszImageStream.h"
@@ -31,7 +31,7 @@
 #include "TargetConditionals.h"
 #endif
 
-static Framework::CStream* CreateImageStream(const fs::path& imagePath)
+static std::unique_ptr<Framework::CStream> CreateImageStream(const fs::path& imagePath)
 {
 	static const char* s3ImagePathPrefix = "//s3/";
 	auto imagePathString = imagePath.string();
@@ -46,7 +46,7 @@ static Framework::CStream* CreateImageStream(const fs::path& imagePath)
 			throw std::runtime_error("Invalid S3 object path.");
 		}
 		auto bucketName = std::string(fullObjectPath.begin(), fullObjectPath.begin() + objectPathPos);
-		return new CS3ObjectStream(bucketName.c_str(), fullObjectPath.c_str() + objectPathPos + 1);
+		return std::make_unique<CS3ObjectStream>(bucketName.c_str(), fullObjectPath.c_str() + objectPathPos + 1);
 #else
 		throw std::runtime_error("S3 support was disabled during build configuration.");
 #endif
@@ -55,16 +55,16 @@ static Framework::CStream* CreateImageStream(const fs::path& imagePath)
 	if(Framework::Android::CContentUtils::IsContentPath(imagePath))
 	{
 		auto uri = Framework::Android::CContentUtils::BuildUriFromPath(imagePath);
-		return new Framework::Android::CContentStream(uri.c_str(), "r");
+		return std::make_unique<Framework::Android::CContentStream>(uri.c_str(), "r");
 	}
 	else
 	{
-		return new Framework::CPosixFileStream(imagePathString.c_str(), O_RDONLY);
+		return std::make_unique<Framework::CPosixFileStream>(imagePathString.c_str(), O_RDONLY);
 	}
 #elif defined(__EMSCRIPTEN__)
-	return new CJsDiscImageDeviceStream();
+	return std::make_unique<CJsDiscImageDeviceStream>();
 #else
-	return new Framework::CStdStream(imagePathString.c_str(), "rb");
+	return std::make_unique<Framework::CStdStream>(imagePathString.c_str(), "rb");
 #endif
 }
 
@@ -108,16 +108,16 @@ static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromChd(const fs::path& imag
 {
 	//Some notes about CHD support:
 	//- We don't support multi track CDs
-	auto imageStream = std::make_shared<CChdImageStream>(CreateImageStream(imagePath));
+	auto imageStream = std::make_shared<CChdCdImageStream>(CreateImageStream(imagePath));
 	auto trackInfo = [&imageStream]() -> std::pair<COpticalMedia::BlockProviderPtr, COpticalMedia::TRACK_DATA_TYPE> {
 		switch(imageStream->GetTrack0Type())
 		{
 		default:
 			assert(false);
 			[[fallthrough]];
-		case CChdImageStream::TRACK_TYPE_MODE1:
+		case CChdCdImageStream::TRACK_TYPE_MODE1:
 			return std::make_pair(std::make_shared<ISO9660::CBlockProviderCustom<0x990, 0>>(imageStream), COpticalMedia::TRACK_DATA_TYPE_MODE1_2048);
-		case CChdImageStream::TRACK_TYPE_MODE2_RAW:
+		case CChdCdImageStream::TRACK_TYPE_MODE2_RAW:
 			return std::make_pair(std::make_shared<ISO9660::CBlockProviderCustom<0x990, 0x18>>(imageStream), COpticalMedia::TRACK_DATA_TYPE_MODE2_2352);
 		}
 	}();

@@ -177,6 +177,7 @@ public:
 	int32 ReferModuleStatus(uint32, uint32);
 	void ProcessModuleReset(const std::string&);
 
+	void SetDefaultImageVersion(uint32);
 	bool TryGetImageVersionFromPath(const std::string&, unsigned int*);
 	bool TryGetImageVersionFromContents(const std::string&, unsigned int*);
 
@@ -203,6 +204,7 @@ public:
 
 	Iop::CSysmem* GetSysmem();
 	Iop::CIoman* GetIoman();
+	Iop::CSifMan* GetSifman();
 	Iop::CCdvdman* GetCdvdman();
 	Iop::CLoadcore* GetLoadcore();
 #ifdef _IOP_EMULATE_MODULES
@@ -212,6 +214,8 @@ public:
 #endif
 	bool RegisterModule(const Iop::ModulePtr&);
 	bool ReleaseModule(const std::string&);
+
+	void RegisterHleModuleReplacement(const std::string&, const Iop::ModulePtr&);
 
 	uint32 CreateThread(uint32, uint32, uint32, uint32, uint32);
 	int32 DeleteThread(uint32);
@@ -302,6 +306,11 @@ public:
 	ModuleStartedEvent OnModuleStarted;
 
 private:
+	enum
+	{
+		DEFAULT_IMAGE_VERSION = 1000,
+	};
+
 	enum DEFAULT_STACKSIZE
 	{
 		DEFAULT_STACKSIZE = 0x4000,
@@ -610,6 +619,8 @@ private:
 	std::string ReadModuleName(uint32);
 	void DeleteModules();
 
+	void UnloadUserComponents();
+
 	int32 LoadHleModule(const Iop::ModulePtr&);
 	void RegisterHleModule(const Iop::ModulePtr&);
 
@@ -645,6 +656,8 @@ private:
 	uint32 m_moduleStarterProcAddress;
 	uint32 m_alarmThreadProcAddress;
 	uint32 m_vblankHandlerAddress;
+
+	uint32 m_defaultImageVersion = DEFAULT_IMAGE_VERSION;
 
 	bool m_rescheduleNeeded = false;
 	LoadedModuleList m_loadedModules;
