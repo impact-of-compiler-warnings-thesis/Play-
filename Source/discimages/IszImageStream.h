@@ -1,12 +1,13 @@
 #pragma once
 
+#include <memory>
 #include "Types.h"
 #include "Stream.h"
 
 class CIszImageStream : public Framework::CStream
 {
 public:
-	CIszImageStream(Framework::CStream*);
+	CIszImageStream(std::unique_ptr<Framework::CStream>);
 	virtual ~CIszImageStream();
 
 	virtual void Seek(int64, Framework::STREAM_SEEK_DIRECTION) override;
@@ -78,7 +79,7 @@ private:
 	void ReadGzipBlock(uint32);
 	void ReadBz2Block(uint32);
 
-	Framework::CStream* m_baseStream = nullptr;
+	std::unique_ptr<Framework::CStream> m_baseStream;
 	HEADER m_header;
 	BLOCKDESCRIPTOR* m_blockDescriptorTable = nullptr;
 	int64 m_cachedBlockNumber = -1;

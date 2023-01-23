@@ -5,6 +5,7 @@
 #ifdef HAS_AMAZON_S3
 #include "S3FileBrowser.h"
 #endif
+#include "ui_shared/ArcadeUtils.h"
 #include "ui_shared/BootablesProcesses.h"
 #include "ui_shared/StatsManager.h"
 #include "QtUtils.h"
@@ -74,6 +75,8 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
+	ArcadeUtils::RegisterArcadeMachines();
+
 	ui->setupUi(this);
 	buildResizeWindowMenu();
 
@@ -420,6 +423,23 @@ void MainWindow::BootCDROM()
 	}
 	m_msgLabel->setText(QString("Loaded executable '%1' from cdrom0.")
 	                        .arg(m_virtualMachine->m_ee->m_os->GetExecutableName()));
+}
+
+void MainWindow::BootArcadeMachine(fs::path arcadeDefPath)
+{
+	try
+	{
+		ArcadeUtils::BootArcadeMachine(m_virtualMachine, arcadeDefPath);
+		m_lastOpenCommand = LastOpenCommand(BootType::ARCADE, arcadeDefPath);
+		m_msgLabel->setText(QString("Started arcade machine '%1'.").arg(arcadeDefPath.filename().c_str()));
+		UpdateUI();
+	}
+	catch(const std::exception& e)
+	{
+		QMessageBox messageBox;
+		messageBox.critical(nullptr, "Error", e.what());
+		messageBox.show();
+	}
 }
 
 void MainWindow::on_actionExit_triggered()
@@ -924,13 +944,20 @@ void MainWindow::on_actionReset_triggered()
 {
 	if(!m_lastOpenCommand.path.empty())
 	{
-		if(m_lastOpenCommand.type == BootType::CD)
+		switch(m_lastOpenCommand.type)
 		{
+		case BootType::CD:
 			BootCDROM();
-		}
-		else if(m_lastOpenCommand.type == BootType::ELF)
-		{
+			break;
+		case BootType::ELF:
 			BootElf(m_lastOpenCommand.path);
+			break;
+		case BootType::ARCADE:
+			BootArcadeMachine(m_lastOpenCommand.path);
+			break;
+		default:
+			assert(false);
+			break;
 		}
 	}
 }
@@ -1003,6 +1030,10 @@ void MainWindow::SetupBootableView()
 			else if(IsBootableExecutablePath(filePath))
 			{
 				BootElf(filePath);
+			}
+			else if(IsBootableArcadeDefPath(filePath))
+			{
+				BootArcadeMachine(filePath);
 			}
 			else
 			{

@@ -1,6 +1,7 @@
 #include "McDumpReader.h"
 #include <cstring>
 #include <cassert>
+#include <stdexcept>
 
 //Source:
 //http://www.csclub.uwaterloo.ca:11068/mymc/ps2mcfs.html
@@ -28,6 +29,19 @@ CMcDumpReader::CMcDumpReader(Framework::CStream& stream)
 	assert(actualSize >= expectedSize);
 
 	uint32 pageSpareSize = (actualSize - expectedSize) / totalPageCount;
+
+	//Some other card dumps have ECC but have a wrong size which makes the above check fail
+	//If we have 0 at 0x20C, we most likely have a dump that has ECC interleaved with pages
+	//Problematic dumps: Smash Court Pro Tournament
+	{
+		m_stream.Seek(0x20C, Framework::STREAM_SEEK_SET);
+		uint32 spareAreaCheck = m_stream.Read32();
+		if(spareAreaCheck == 0)
+		{
+			pageSpareSize = 0x10;
+		}
+	}
+
 	m_rawPageSize = m_header.pageSize + pageSpareSize;
 }
 
@@ -44,7 +58,10 @@ CMcDumpReader::Directory CMcDumpReader::ReadDirectory(uint32 dirCluster)
 	{
 		DIRENTRY dirEntry = {};
 		readAmount = reader.Read(&dirEntry, sizeof(DIRENTRY));
-		assert(readAmount == sizeof(DIRENTRY));
+		if(readAmount != sizeof(DIRENTRY))
+		{
+			throw std::runtime_error("Failed to read directory entry.");
+		}
 		result.push_back(dirEntry);
 	}
 	return result;

@@ -7,6 +7,7 @@
 #include "lexical_cast_ex.h"
 #include "BitManip.h"
 #include "StringUtils.h"
+#include "std_experimental_map.h"
 
 #include "IopBios.h"
 #include "../COP_SCU.h"
@@ -130,6 +131,7 @@ CIopBios::~CIopBios()
 
 void CIopBios::Reset(const Iop::SifManPtr& sifMan)
 {
+	SetDefaultImageVersion(DEFAULT_IMAGE_VERSION);
 	PopulateSystemIntcHandlers();
 
 	//Assemble handlers
@@ -273,9 +275,12 @@ void CIopBios::Reset(const Iop::SifManPtr& sifMan)
 	m_hleModules.insert(std::make_pair("rom0:XPADMAN", m_padman));
 	m_hleModules.insert(std::make_pair("rom0:XMTAPMAN", m_mtapman));
 	m_hleModules.insert(std::make_pair("rom0:MCMAN", m_mcserv));
+	m_hleModules.insert(std::make_pair("rom0:MCMANO", m_mcserv));
 	m_hleModules.insert(std::make_pair("rom0:MCSERV", m_mcserv));
 	m_hleModules.insert(std::make_pair("rom0:XMCMAN", m_mcserv));
 	m_hleModules.insert(std::make_pair("rom0:XMCSERV", m_mcserv));
+	m_hleModules.insert(std::make_pair("rom0:CDVDMAN", m_cdvdman));
+	m_hleModules.insert(std::make_pair("rom0:CDVDFSV", m_cdvdfsv));
 
 #endif
 
@@ -659,16 +664,6 @@ int32 CIopBios::LoadModuleFromHost(uint8* modulePtr)
 
 int32 CIopBios::LoadModule(CELF32& elf, const char* path, uint32 loadAddress, bool ownsMemory)
 {
-	uint32 loadedModuleId = m_loadedModules.Allocate();
-	assert(loadedModuleId != -1);
-	if(loadedModuleId == -1) return -1;
-
-	auto loadedModule = m_loadedModules[loadedModuleId];
-	loadedModule->ownsMemory = ownsMemory;
-
-	ExecutableRange moduleRange;
-	uint32 entryPoint = LoadExecutable(elf, moduleRange, loadAddress);
-
 	//Find .iopmod section
 	const auto& header = elf.GetHeader();
 	const IOPMOD* iopMod = NULL;
@@ -678,6 +673,30 @@ int32 CIopBios::LoadModule(CELF32& elf, const char* path, uint32 loadAddress, bo
 		if(sectionHeader->nType != IOPMOD_SECTION_ID) continue;
 		iopMod = reinterpret_cast<const IOPMOD*>(elf.GetSectionData(i));
 	}
+
+	std::string moduleName = iopMod ? iopMod->moduleName : "";
+	if(moduleName.empty())
+	{
+		moduleName = path;
+	}
+
+#ifdef _IOP_EMULATE_MODULES
+	auto hleModuleIterator = m_hleModules.find(moduleName);
+	if(hleModuleIterator != std::end(m_hleModules))
+	{
+		return LoadHleModule(hleModuleIterator->second);
+	}
+#endif
+
+	uint32 loadedModuleId = m_loadedModules.Allocate();
+	assert(loadedModuleId != -1);
+	if(loadedModuleId == -1) return -1;
+
+	auto loadedModule = m_loadedModules[loadedModuleId];
+	loadedModule->ownsMemory = ownsMemory;
+
+	ExecutableRange moduleRange;
+	uint32 entryPoint = LoadExecutable(elf, moduleRange, loadAddress);
 
 	assert(iopMod);
 	if(iopMod != nullptr)
@@ -701,12 +720,6 @@ int32 CIopBios::LoadModule(CELF32& elf, const char* path, uint32 loadAddress, bo
 			assert(totalSize == moduleSize);
 		}
 		memset(m_ram + moduleRange.first + bssSectPos, 0, bssSectSize);
-	}
-
-	std::string moduleName = iopMod ? iopMod->moduleName : "";
-	if(moduleName.empty())
-	{
-		moduleName = path;
 	}
 
 	//Fill in module info
@@ -865,9 +878,10 @@ int32 CIopBios::ReferModuleStatus(uint32 moduleId, uint32 statusPtr)
 void CIopBios::ProcessModuleReset(const std::string& initCommand)
 {
 	CLog::GetInstance().Print(LOGNAME, "ProcessModuleReset(%s);\r\n", initCommand.c_str());
-	m_sifCmd->ClearServers();
 
-	unsigned int imageVersion = 1000;
+	UnloadUserComponents();
+
+	uint32 imageVersion = m_defaultImageVersion;
 
 	auto initArguments = StringUtils::Split(initCommand);
 	assert(initArguments.size() >= 1);
@@ -892,6 +906,11 @@ void CIopBios::ProcessModuleReset(const std::string& initCommand)
 #ifdef _IOP_EMULATE_MODULES
 	m_fileIo->SetModuleVersion(imageVersion);
 #endif
+}
+
+void CIopBios::SetDefaultImageVersion(uint32 defaultImageVersion)
+{
+	m_defaultImageVersion = defaultImageVersion;
 }
 
 bool CIopBios::TryGetImageVersionFromPath(const std::string& imagePath, unsigned int* result)
@@ -947,6 +966,8 @@ bool CIopBios::TryGetImageVersionFromContents(const std::string& imagePath, unsi
 	//  and it also doesn't have a fileio string that lets us find the required version,
 	//  thus, we rely on the ioprp pattern for this game.
 	static const std::string fileIoPatternString = "PsIIfileio  ";
+	static const std::string sysmemPatternString = "PsIIsysmem  ";
+	static const std::string loadcorePatternString = "PsIIloadcore";
 	static const std::string ioprpPatternString = "ioprp";
 
 	auto tryMatchVersionPattern =
@@ -983,6 +1004,14 @@ bool CIopBios::TryGetImageVersionFromContents(const std::string& imagePath, unsi
 		}
 		moduleVersionString[moduleVersionStringSize] = 0;
 		if(tryMatchVersionPattern(moduleVersionString, fileIoPatternString))
+		{
+			return true;
+		}
+		else if(tryMatchVersionPattern(moduleVersionString, sysmemPatternString))
+		{
+			return true;
+		}
+		else if(tryMatchVersionPattern(moduleVersionString, loadcorePatternString))
 		{
 			return true;
 		}
@@ -1060,7 +1089,7 @@ uint32 CIopBios::CreateThread(uint32 threadProc, uint32 priority, uint32 stackSi
 	}
 
 	auto thread = m_threads[threadId];
-	memset(&thread->context, 0, sizeof(thread->context));
+	thread->context = {};
 	thread->context.delayJump = MIPS_INVALID_PC;
 	thread->stackSize = stackSize;
 	thread->stackBase = stackBase;
@@ -2866,6 +2895,11 @@ Iop::CIoman* CIopBios::GetIoman()
 	return m_ioman.get();
 }
 
+Iop::CSifMan* CIopBios::GetSifman()
+{
+	return m_sifMan.get();
+}
+
 Iop::CCdvdman* CIopBios::GetCdvdman()
 {
 	return m_cdvdman.get();
@@ -3264,6 +3298,36 @@ void CIopBios::DeleteModules()
 	m_modload.reset();
 }
 
+void CIopBios::UnloadUserComponents()
+{
+	//This will attempt to get rid of most things a game might have loaded
+	//This also adds some constraints that could be annoying, like the inability
+	//for HLE modules to create threads or semaphores
+	//This won't get rid of some stuff such as memory allocations
+	assert(m_currentThreadId == -1);
+	for(auto thread : m_threads)
+	{
+		if(!thread) continue;
+		TerminateThread(thread->id);
+		DeleteThread(thread->id);
+	}
+	for(auto loadedModuleIterator = std::begin(m_loadedModules);
+	    loadedModuleIterator != std::end(m_loadedModules); loadedModuleIterator++)
+	{
+		auto loadedModule = *loadedModuleIterator;
+		if(!loadedModule) continue;
+		if(loadedModule->state == MODULE_STATE::STARTED)
+		{
+			loadedModule->state = MODULE_STATE::STOPPED;
+		}
+		UnloadModule(loadedModuleIterator);
+	}
+	std::experimental::erase_if(m_modules, [](const auto& modulePair) { return std::dynamic_pointer_cast<Iop::CDynamic>(modulePair.second); });
+	m_intrHandlers.FreeAll();
+	m_semaphores.FreeAll();
+	m_sifCmd->ClearServers();
+}
+
 int32 CIopBios::LoadHleModule(const Iop::ModulePtr& module)
 {
 	auto loadedModuleId = SearchModuleByName(module->GetId().c_str());
@@ -3348,6 +3412,13 @@ bool CIopBios::ReleaseModule(const std::string& moduleName)
 	if(moduleIterator == std::end(m_modules)) return false;
 	m_modules.erase(moduleIterator);
 	return true;
+}
+
+void CIopBios::RegisterHleModuleReplacement(const std::string& path, const Iop::ModulePtr& module)
+{
+	//Not definitive function, needs to support filtering by module name
+	//Can also screwup some things with saved states
+	m_hleModules.insert(std::make_pair(path, module));
 }
 
 uint32 CIopBios::LoadExecutable(CELF32& elf, ExecutableRange& executableRange, uint32 baseAddress)
@@ -3633,6 +3704,11 @@ BiosDebugModuleInfoArray CIopBios::GetModulesDebugInfo() const
 	return m_moduleTags;
 }
 
+enum IOP_BIOS_DEBUG_OBJECT_TYPE
+{
+	IOP_BIOS_DEBUG_OBJECT_TYPE_SIFRPCSERVER = BIOS_DEBUG_OBJECT_TYPE_CUSTOM_START,
+};
+
 BiosDebugObjectInfoMap CIopBios::GetBiosObjectsDebugInfo() const
 {
 	static BiosDebugObjectInfoMap objectDebugInfo = [] {
@@ -3651,6 +3727,18 @@ BiosDebugObjectInfoMap CIopBios::GetBiosObjectsDebugInfo() const
 			        {"State", BIOS_DEBUG_OBJECT_FIELD_TYPE::STRING},
 			    };
 			result.emplace(std::make_pair(BIOS_DEBUG_OBJECT_TYPE_THREAD, std::move(info)));
+		}
+		{
+			BIOS_DEBUG_OBJECT_INFO info;
+			info.name = "SIF RPC Servers";
+			info.selectionAction = BIOS_DEBUG_OBJECT_ACTION::SHOW_LOCATION;
+			info.fields =
+			    {
+			        {"Id", BIOS_DEBUG_OBJECT_FIELD_TYPE::UINT32, BIOS_DEBUG_OBJECT_FIELD_ATTRIBUTE::IDENTIFIER | BIOS_DEBUG_OBJECT_FIELD_ATTRIBUTE::DATA_ADDRESS},
+			        {"Handler", BIOS_DEBUG_OBJECT_FIELD_TYPE::UINT32, BIOS_DEBUG_OBJECT_FIELD_ATTRIBUTE::LOCATION | BIOS_DEBUG_OBJECT_FIELD_ATTRIBUTE::TEXT_ADDRESS},
+			        {"Queue Thread Id", BIOS_DEBUG_OBJECT_FIELD_TYPE::UINT32, BIOS_DEBUG_OBJECT_FIELD_ATTRIBUTE::NONE},
+			    };
+			result.emplace(std::make_pair(IOP_BIOS_DEBUG_OBJECT_TYPE_SIFRPCSERVER, std::move(info)));
 		}
 		return result;
 	}();
@@ -3738,6 +3826,29 @@ BiosDebugObjectArray CIopBios::GetBiosObjects(uint32 typeId) const
 			result.push_back(obj);
 		}
 		break;
+	case IOP_BIOS_DEBUG_OBJECT_TYPE_SIFRPCSERVER:
+	{
+		const auto& servers = m_sifCmd->GetServers();
+		for(const auto& server : servers)
+		{
+			uint32 serverDataAddr = server->GetServerDataAddress();
+			uint32 queueThreadId = -1;
+			auto serverData = reinterpret_cast<const Iop::CSifCmd::SIFRPCSERVERDATA*>(m_ram + serverDataAddr);
+			if(serverData->queueAddr != 0)
+			{
+				auto queueData = reinterpret_cast<const Iop::CSifCmd::SIFRPCQUEUEDATA*>(m_ram + serverData->queueAddr);
+				queueThreadId = queueData->threadId;
+			}
+			BIOS_DEBUG_OBJECT obj;
+			obj.fields = {
+			    BIOS_DEBUG_OBJECT_FIELD(std::in_place_type<uint32>, serverData->serverId),
+			    BIOS_DEBUG_OBJECT_FIELD(std::in_place_type<uint32>, serverData->function),
+			    BIOS_DEBUG_OBJECT_FIELD(std::in_place_type<uint32>, queueThreadId),
+			};
+			result.push_back(obj);
+		}
+	}
+	break;
 	}
 	return result;
 }
